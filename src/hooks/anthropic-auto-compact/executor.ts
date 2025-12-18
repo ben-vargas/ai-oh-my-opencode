@@ -1,7 +1,8 @@
 import type { AutoCompactState, FallbackState, RetryState, TruncateState } from "./types"
 import { FALLBACK_CONFIG, RETRY_CONFIG, TRUNCATE_CONFIG } from "./types"
-import { findLargestToolResult, truncateToolResult } from "./storage"
+import { findLargestToolResult, truncateToolResult, truncateUntilTargetTokens } from "./storage"
 import { findEmptyMessages, injectTextPart } from "../session-recovery/storage"
+import { log } from "../../shared/logger"
 
 type Client = {
   session: {
@@ -209,7 +210,60 @@ export async function executeCompact(
   }
   autoCompactState.compactionInProgress.add(sessionID)
 
+  const errorData = autoCompactState.errorDataBySession.get(sessionID)
   const truncateState = getOrCreateTruncateState(autoCompactState, sessionID)
+
+  if (
+    errorData?.currentTokens &&
+    errorData?.maxTokens &&
+    errorData.currentTokens > errorData.maxTokens &&
+    truncateState.truncateAttempt < TRUNCATE_CONFIG.maxTruncateAttempts
+  ) {
+    log("[auto-compact] aggressive truncation triggered", {
+      currentTokens: errorData.currentTokens,
+      maxTokens: errorData.maxTokens,
+      targetRatio: TRUNCATE_CONFIG.targetTokenRatio,
+    })
+
+    const aggressiveResult = truncateUntilTargetTokens(
+      sessionID,
+      errorData.currentTokens,
+      errorData.maxTokens,
+      TRUNCATE_CONFIG.targetTokenRatio,
+      TRUNCATE_CONFIG.charsPerToken
+    )
+
+    if (aggressiveResult.success && aggressiveResult.truncatedCount > 0) {
+      truncateState.truncateAttempt += aggressiveResult.truncatedCount
+
+      const toolNames = aggressiveResult.truncatedTools.map((t) => t.toolName).join(", ")
+      await (client as Client).tui
+        .showToast({
+          body: {
+            title: "Aggressive Truncation",
+            message: `Truncated ${aggressiveResult.truncatedCount} outputs (${formatBytes(aggressiveResult.totalBytesRemoved)}): ${toolNames}`,
+            variant: "warning",
+            duration: 4000,
+          },
+        })
+        .catch(() => {})
+
+      log("[auto-compact] aggressive truncation completed", aggressiveResult)
+
+      autoCompactState.compactionInProgress.delete(sessionID)
+
+      setTimeout(async () => {
+        try {
+          await (client as Client).session.prompt_async({
+            path: { sessionID },
+            body: { parts: [{ type: "text", text: "Continue" }] },
+            query: { directory },
+          })
+        } catch {}
+      }, 500)
+      return
+    }
+  }
 
   if (truncateState.truncateAttempt < TRUNCATE_CONFIG.maxTruncateAttempts) {
     const largest = findLargestToolResult(sessionID)
@@ -249,7 +303,6 @@ export async function executeCompact(
   }
 
   const retryState = getOrCreateRetryState(autoCompactState, sessionID)
-  const errorData = autoCompactState.errorDataBySession.get(sessionID)
 
   if (errorData?.errorType?.includes("non-empty content")) {
     const attempt = getOrCreateEmptyContentAttempt(autoCompactState, sessionID)

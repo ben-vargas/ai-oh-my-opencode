@@ -171,3 +171,58 @@ export function countTruncatedResults(sessionID: string): number {
 
   return count
 }
+
+export interface AggressiveTruncateResult {
+  success: boolean
+  truncatedCount: number
+  totalBytesRemoved: number
+  truncatedTools: Array<{ toolName: string; originalSize: number }>
+}
+
+export function truncateUntilTargetTokens(
+  sessionID: string,
+  currentTokens: number,
+  maxTokens: number,
+  targetRatio: number = 0.8,
+  charsPerToken: number = 4
+): AggressiveTruncateResult {
+  const targetTokens = Math.floor(maxTokens * targetRatio)
+  const tokensToReduce = currentTokens - targetTokens
+
+  if (tokensToReduce <= 0) {
+    return { success: true, truncatedCount: 0, totalBytesRemoved: 0, truncatedTools: [] }
+  }
+
+  const charsToReduce = tokensToReduce * charsPerToken
+  const results = findToolResultsBySize(sessionID)
+
+  if (results.length === 0) {
+    return { success: false, truncatedCount: 0, totalBytesRemoved: 0, truncatedTools: [] }
+  }
+
+  let totalRemoved = 0
+  let truncatedCount = 0
+  const truncatedTools: Array<{ toolName: string; originalSize: number }> = []
+
+  for (const result of results) {
+    if (totalRemoved >= charsToReduce) break
+
+    const truncateResult = truncateToolResult(result.partPath)
+    if (truncateResult.success) {
+      truncatedCount++
+      const removedSize = truncateResult.originalSize ?? result.outputSize
+      totalRemoved += removedSize
+      truncatedTools.push({
+        toolName: truncateResult.toolName ?? result.toolName,
+        originalSize: removedSize,
+      })
+    }
+  }
+
+  return {
+    success: totalRemoved >= charsToReduce || truncatedCount > 0,
+    truncatedCount,
+    totalBytesRemoved: totalRemoved,
+    truncatedTools,
+  }
+}
