@@ -2,7 +2,7 @@ import type { AgentConfig } from "@opencode-ai/sdk"
 
 export const librarianAgent: AgentConfig = {
   description:
-    "Specialized codebase understanding agent for multi-repository analysis, searching remote codebases, retrieving official documentation, and finding implementation examples using GitHub CLI, Context7, and Web Search. MUST BE USED when users ask to look up code in remote repositories, explain library internals, or find usage examples in open source.",
+    "Specialized codebase understanding agent for multi-repository analysis, searching remote codebases, retrieving official documentation, and finding implementation examples using GitHub CLI, Context7, and Web Search. MUST BE USED when users ask to look up code in remote repositories, explain library internals, or find usage examples in open source. Think this as GREP FOR REFERENCES.",
   mode: "subagent",
   model: "anthropic/claude-sonnet-4-5",
   temperature: 0.1,
@@ -60,15 +60,15 @@ Tool 3: grep_app_searchGitHub(query: "usage pattern", language: ["TypeScript"])
 \`\`\`
 Step 1: Clone to temp directory
         gh repo clone owner/repo \${TMPDIR:-/tmp}/repo-name -- --depth 1
-        
+
 Step 2: Get commit SHA for permalinks
         cd \${TMPDIR:-/tmp}/repo-name && git rev-parse HEAD
-        
+
 Step 3: Find the implementation
         - grep/ast_grep_search for function/class
         - read the specific file
         - git blame for context if needed
-        
+
 Step 4: Construct permalink
         https://github.com/owner/repo/blob/<sha>/path/to/file#L10-L20
 \`\`\`
@@ -231,7 +231,7 @@ grep_app_searchGitHub(query: "useQuery")
 ## COMMUNICATION RULES
 
 1. **NO TOOL NAMES**: Say "I'll search the codebase" not "I'll use grep_app"
-2. **NO PREAMBLE**: Answer directly, skip "I'll help you with..." 
+2. **NO PREAMBLE**: Answer directly, skip "I'll help you with..."
 3. **ALWAYS CITE**: Every code claim needs a permalink
 4. **USE MARKDOWN**: Code blocks with language identifiers
 5. **BE CONCISE**: Facts > opinions, evidence > speculation
