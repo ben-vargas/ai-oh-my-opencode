@@ -233,15 +233,19 @@ export async function executeCompact(
       TRUNCATE_CONFIG.charsPerToken
     )
 
-    if (aggressiveResult.success && aggressiveResult.truncatedCount > 0) {
+    if (aggressiveResult.truncatedCount > 0) {
       truncateState.truncateAttempt += aggressiveResult.truncatedCount
 
       const toolNames = aggressiveResult.truncatedTools.map((t) => t.toolName).join(", ")
+      const statusMsg = aggressiveResult.sufficient
+        ? `Truncated ${aggressiveResult.truncatedCount} outputs (${formatBytes(aggressiveResult.totalBytesRemoved)})`
+        : `Truncated ${aggressiveResult.truncatedCount} outputs (${formatBytes(aggressiveResult.totalBytesRemoved)}) but need ${formatBytes(aggressiveResult.targetBytesToRemove)}. Falling back to summarize/revert...`
+
       await (client as Client).tui
         .showToast({
           body: {
-            title: "Aggressive Truncation",
-            message: `Truncated ${aggressiveResult.truncatedCount} outputs (${formatBytes(aggressiveResult.totalBytesRemoved)}): ${toolNames}`,
+            title: aggressiveResult.sufficient ? "Aggressive Truncation" : "Partial Truncation",
+            message: `${statusMsg}: ${toolNames}`,
             variant: "warning",
             duration: 4000,
           },
@@ -250,18 +254,20 @@ export async function executeCompact(
 
       log("[auto-compact] aggressive truncation completed", aggressiveResult)
 
-      autoCompactState.compactionInProgress.delete(sessionID)
+      if (aggressiveResult.sufficient) {
+        autoCompactState.compactionInProgress.delete(sessionID)
 
-      setTimeout(async () => {
-        try {
-          await (client as Client).session.prompt_async({
-            path: { sessionID },
-            body: { parts: [{ type: "text", text: "Continue" }] },
-            query: { directory },
-          })
-        } catch {}
-      }, 500)
-      return
+        setTimeout(async () => {
+          try {
+            await (client as Client).session.prompt_async({
+              path: { sessionID },
+              body: { parts: [{ type: "text", text: "Continue" }] },
+              query: { directory },
+            })
+          } catch {}
+        }, 500)
+        return
+      }
     }
   }
 

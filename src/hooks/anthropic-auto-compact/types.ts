@@ -45,8 +45,8 @@ export const FALLBACK_CONFIG = {
 } as const
 
 export const TRUNCATE_CONFIG = {
-  maxTruncateAttempts: 10,
-  minOutputSizeToTruncate: 1000,
-  targetTokenRatio: 0.8,
+  maxTruncateAttempts: 20,
+  minOutputSizeToTruncate: 500,
+  targetTokenRatio: 0.5,
   charsPerToken: 4,
 } as const

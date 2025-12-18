@@ -174,8 +174,10 @@ export function countTruncatedResults(sessionID: string): number {
 
 export interface AggressiveTruncateResult {
   success: boolean
+  sufficient: boolean
   truncatedCount: number
   totalBytesRemoved: number
+  targetBytesToRemove: number
   truncatedTools: Array<{ toolName: string; originalSize: number }>
 }
 
@@ -188,16 +190,30 @@ export function truncateUntilTargetTokens(
 ): AggressiveTruncateResult {
   const targetTokens = Math.floor(maxTokens * targetRatio)
   const tokensToReduce = currentTokens - targetTokens
+  const charsToReduce = tokensToReduce * charsPerToken
 
   if (tokensToReduce <= 0) {
-    return { success: true, truncatedCount: 0, totalBytesRemoved: 0, truncatedTools: [] }
+    return {
+      success: true,
+      sufficient: true,
+      truncatedCount: 0,
+      totalBytesRemoved: 0,
+      targetBytesToRemove: 0,
+      truncatedTools: [],
+    }
   }
 
-  const charsToReduce = tokensToReduce * charsPerToken
   const results = findToolResultsBySize(sessionID)
 
   if (results.length === 0) {
-    return { success: false, truncatedCount: 0, totalBytesRemoved: 0, truncatedTools: [] }
+    return {
+      success: false,
+      sufficient: false,
+      truncatedCount: 0,
+      totalBytesRemoved: 0,
+      targetBytesToRemove: charsToReduce,
+      truncatedTools: [],
+    }
   }
 
   let totalRemoved = 0
@@ -205,8 +221,6 @@ export function truncateUntilTargetTokens(
   const truncatedTools: Array<{ toolName: string; originalSize: number }> = []
 
   for (const result of results) {
-    if (totalRemoved >= charsToReduce) break
-
     const truncateResult = truncateToolResult(result.partPath)
     if (truncateResult.success) {
       truncatedCount++
@@ -219,10 +233,14 @@ export function truncateUntilTargetTokens(
     }
   }
 
+  const sufficient = totalRemoved >= charsToReduce
+
   return {
-    success: totalRemoved >= charsToReduce || truncatedCount > 0,
+    success: truncatedCount > 0,
+    sufficient,
     truncatedCount,
     totalBytesRemoved: totalRemoved,
+    targetBytesToRemove: charsToReduce,
     truncatedTools,
   }
 }
