@@ -1,8 +1,19 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import { xdgData } from "xdg-basedir"
 
-const OPENCODE_STORAGE = join(xdgData ?? "", "opencode", "storage")
+let OPENCODE_STORAGE = join(xdgData ?? "", "opencode", "storage")
+
+// Fix for macOS where xdg-basedir points to ~/Library/Application Support
+// but OpenCode (cli) uses ~/.local/share
+if (process.platform === "darwin" && !existsSync(OPENCODE_STORAGE)) {
+  const localShare = join(homedir(), ".local", "share", "opencode", "storage")
+  if (existsSync(localShare)) {
+    OPENCODE_STORAGE = localShare
+  }
+}
+
 const MESSAGE_STORAGE = join(OPENCODE_STORAGE, "message")
 const PART_STORAGE = join(OPENCODE_STORAGE, "part")
 

@@ -268,6 +268,17 @@ export async function executeCompact(
         }, 500)
         return
       }
+    } else {
+      await (client as Client).tui
+        .showToast({
+          body: {
+            title: "Truncation Skipped",
+            message: "No tool outputs found to truncate.",
+            variant: "warning",
+            duration: 3000,
+          },
+        })
+        .catch(() => {})
     }
   }
 
@@ -304,6 +315,20 @@ export async function executeCompact(
           } catch {}
         }, 500)
         return
+      }
+    } else {
+      // Only show this toast if we didn't just try aggressive truncation (to avoid double toasts)
+      if (!errorData?.currentTokens) {
+        await (client as Client).tui
+          .showToast({
+            body: {
+              title: "Truncation Skipped",
+              message: "No large tool outputs found.",
+              variant: "warning",
+              duration: 3000,
+            },
+          })
+          .catch(() => {})
       }
     }
   }
@@ -379,6 +404,17 @@ export async function executeCompact(
         }, cappedDelay)
         return
       }
+    } else {
+      await (client as Client).tui
+        .showToast({
+          body: {
+            title: "Summarize Skipped",
+            message: "Missing providerID or modelID. Skipping to revert...",
+            variant: "warning",
+            duration: 3000,
+          },
+        })
+        .catch(() => {})
     }
   }
 
@@ -427,6 +463,17 @@ export async function executeCompact(
         }, 1000)
         return
       } catch {}
+    } else {
+      await (client as Client).tui
+        .showToast({
+          body: {
+            title: "Revert Skipped",
+            message: "Could not find last message pair to revert.",
+            variant: "warning",
+            duration: 3000,
+          },
+        })
+        .catch(() => {})
     }
   }
 
